@@ -1,0 +1,28 @@
+function findID2() {
+  let name = 'RIBLOStatusTimestampUserlookup'
+  let call = tableauAPIKY.APIRequest()
+  call.signin();
+  let data = call.getViewId(name).execute()
+  Logger.log(data.views.view[0].id)
+}
+
+
+function updateLists2() {
+  // Custom view: Filing Tracker
+  let viewId = '1e218792-af1c-49e2-b73b-36b27b243c53';
+  let call = tableauAPIKY.APIRequest().signin();
+  let response = call.getCustomViewData(viewId).execute();
+  
+  // We MUST parse the CSV text into a 2D array for Google Sheets to accept it,
+  // but we have completely removed the filter logic!
+  let data = Utilities.parseCsv(response);
+  
+  // Stop immediately if no data is returned
+  if (!data || data.length === 0) return;
+  
+  // Clear old data in columns C through G
+  LISTS.getRange("C3:F").clearContent();
+  
+  // Place the data starting at Row 3, Column 3 (C3)
+  LISTS.getRange(3, 3, data.length, 4).setValues(data);
+}
