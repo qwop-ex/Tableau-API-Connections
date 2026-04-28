@@ -1,0 +1,119 @@
+function onOpen() {
+  const UI = SpreadsheetApp.getUi();
+  UI.createMenu("Tableau")
+  .addItem("Update Tableau Import", "importTableauData")
+  .addToUi();
+}
+
+/**
+ * Use this factory function to store all of the script's needed "constants" for ease of use.
+ *
+ * returns {Object}
+ */
+function getConstants() {
+  return { // No longer uses Object.freeze so C.numOfFields can be adjusted for custom fields.
+    tableauId: "50db5ab9-f786-4104-b36b-b7be6109e201",
+    reportMeasures: 12,
+    numOfFields: 21,
+    importId: 1736504451
+  };
+}
+
+function importTableauData() {
+  const C = getConstants();
+
+  const api = tableauAPIKY.APIRequest().signin();
+  let data = api.getViewData(C.tableauId).execute();
+
+  data = Utilities.parseCsv(data);
+  data = correctReportData(C, data);
+
+  const S = SpreadsheetApp.getActive();
+  const SS = S.getSheetById(C.importId);
+  SS.getDataRange().clearContent();
+  SS.getRange(1, 1, data.length, C.numOfFields).setValues(data);
+}
+
+function correctReportData(C, tableauData) {
+  const output = [];
+  if (!tableauData || !Array.isArray(tableauData)) {
+    output.push(["Reading invalid data type for Tableau report (expected Array)"]);
+    return output;
+  };
+
+  let headers = tableauData.shift();
+  headers = initRow(headers, true);
+  for (let i = 0; i < C.reportMeasures; i++) {
+    headers.push(tableauData[i][0]);
+  }
+
+  const customFields = [ // For custom fields, where calcs can be backloaded.
+    "Logical Date",
+    "Lane"
+  ];
+  customFields.forEach(f => {
+    C.numOfFields += 1;
+    headers.push(f);
+  });
+  output.push(headers);
+
+  const headerLength = headers.length;
+  if (headerLength !== C.numOfFields) {
+    output.push([
+      `Unexpected number of fields from report: Expected ${C.numOfFields} and found ${headerLength}`,
+      ...new Array(headerLength - 1).fill("")
+    ]);
+    return output;
+  }
+
+  const dataLength = tableauData.length;
+  if (dataLength % C.reportMeasures !== 0) {
+    output.push([
+      `Reading unpaired row counts: Dividing ${C.reportMeasures} measures into ${dataLength} rows`,
+      ...new Array(C.numOfFields - 1).fill("")
+    ]);
+    return output;
+  }
+
+  for (let i = 0; i < dataLength / C.reportMeasures; i ++) {
+    const row = initRow(tableauData[(i * C.reportMeasures)]);
+    const id = row?.[0], pS = row?.[4], tP = row?.[5];
+    if (!row || row[5] === "") continue;
+    for (let j = 1; j < C.reportMeasures; j++) {
+      row.push(tableauData[(i * C.reportMeasures) + (1 * j)][tableauData[(i * C.reportMeasures) + (1 * j)].length - 1]);
+    }
+
+    // CUSTOM FIELD PUSHES //
+    const fieldsToPush = [
+      getLogicalDate(pS, tP),
+      getRILane(id)
+    ];
+    row.push(...fieldsToPush);
+
+    output.push(row);
+  }
+
+  return output;
+}
+
+function initRow(r, isHeader = false) {
+    const [, pB, pS, ttl, id, s, tP, tV, vB, vS, mV] = r;
+    const row = [id, s, ttl, pB, pS, tP, vB, vS, tV];
+    if (!isHeader) row.push(mV);
+    return row;
+}
+
+function getRILane(id) {
+  const stdCheck = /-STD[A-Z]?-/;
+  const prfCheck = /-PRF[A-Z]?-/;
+  return stdCheck.test(id) ? "STD" : prfCheck.test(id) ? "PRF" : "UNKNOWN";
+}
+
+function getLogicalDate(startDate, timeToProcess) {
+  const date = new Date(startDate);
+  if (!timeToProcess) return "";
+
+  const [h, m, s] = String(timeToProcess).split(":").map(n => Number(n));
+  date.setHours(date.getHours() + h, date.getMinutes() + m, date.getSeconds() + s);
+  return new Date(date).toLocaleDateString();
+}
