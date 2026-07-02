@@ -1,0 +1,27 @@
+const sss = SpreadsheetApp.getActiveSpreadsheet();
+const LISTS = sss.getSheetByName("Lists");
+const TABLEAU_TOKEN_EMAIL = 'jbleach@ebay.com'
+
+function findID() {
+  let name = 'RIRunReport'
+  let call = tableauAPIKY.APIRequest()
+  call.signin(TABLEAU_TOKEN_EMAIL);
+  let data = call.getViewId(name).execute()
+  Logger.log(data.views.view[0].id)
+}
+
+function updateLists(){
+
+  //Custom view: Filing Run Manager 2026
+  let viewId = 'e8d8f2c8-3300-40d7-9bc5-1639041200d9';
+  let call = tableauAPIKY.APIRequest().signin(TABLEAU_TOKEN_EMAIL);
+  let response = call.getCustomViewData(viewId).execute();
+  
+  response = Utilities.parseCsv(response).filter(f => {return (f[0] == 'Total Product Quantity' && f[2] != 'Cancelled')});
+  response = response.map(m => {m.shift();m.splice(1,1);return m})
+  Logger.log(response)
+  let range = LISTS.getRange(2,1,LISTS.getLastRow()+1,2);
+  range.clearContent();
+  range.offset(0,0,response.length,2).setValues(response);
+  
+}
