@@ -1,0 +1,42 @@
+const sss = SpreadsheetApp.getActiveSpreadsheet();
+const D2SDATA = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("D2Sdata");
+const TABLEAU_TOKEN_EMAIL = 'jbleach@ebay.com'
+
+
+function findID() {
+  let name = 'MadsDock-to-Stock'
+  let call = tableauAPIKY.APIRequest()
+  call.signin(TABLEAU_TOKEN_EMAIL);
+  let data = call.getViewId(name).execute()
+  Logger.log(data.views.view[0].id)
+}
+
+function updateD2Sdata() {
+  // Custom view: 90days
+  let viewId = 'd66576c0-06a3-47a1-b27c-d16a08b14caa';
+
+  let call = tableauAPIKY.APIRequest().signin(TABLEAU_TOKEN_EMAIL);
+  let response = call.getCustomViewData(viewId).execute();
+
+  response = Utilities.parseCsv(response);
+
+  // Tableau API order:
+  // 0 Created At Et
+  // 1 Dock-to-Intake Hours
+  // 2 Dock-to-Stock Hours
+  // 3 Intake-to-Stocked Hours
+  // 4 Processing Ended At Et
+  // 5 Received At Et
+  // 6 Reimbursement Invoice Number
+  // 7 Shelved At Et
+  // 8 Shelved By User Email
+
+  const order = [6, 0, 5, 4, 7, 8, 1, 3, 2];
+
+  const output = response.map(row =>
+    order.map(i => row[i] || "")
+  );
+
+  D2SDATA.getRange("A2:I").clearContent();
+  D2SDATA.getRange(2, 1, output.length, 9).setValues(output);
+}
